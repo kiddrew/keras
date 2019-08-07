@@ -71,7 +71,7 @@ def get_uid(prefix=''):
         A unique identifier for the graph.
     """
     global _GRAPH_UID_DICTS
-    graph = tf.get_default_graph()
+    graph = tf.compat.v1.get_default_graph()
     if graph not in _GRAPH_UID_DICTS:
         _GRAPH_UID_DICTS[graph] = defaultdict(int)
     _GRAPH_UID_DICTS[graph][prefix] += 1
@@ -96,12 +96,12 @@ def clear_session():
     reset_uids()
     _SESSION = None
     with tf.name_scope(''):
-        phase = tf.placeholder_with_default(
+        phase = tf.compat.v1.placeholder_with_default(
             False,
             shape=(),
             name='keras_learning_phase')
     _GRAPH_LEARNING_PHASES = {}
-    _GRAPH_LEARNING_PHASES[tf.get_default_graph()] = phase
+    _GRAPH_LEARNING_PHASES[tf.compat.v1.get_default_graph()] = phase
 
 
 def manual_variable_initialization(value):
@@ -130,10 +130,10 @@ def learning_phase():
     # Returns
         Learning phase (scalar integer tensor or Python integer).
     """
-    graph = tf.get_default_graph()
+    graph = tf.compat.v1.get_default_graph()
     if graph not in _GRAPH_LEARNING_PHASES:
         with tf.name_scope(''):
-            phase = tf.placeholder_with_default(
+            phase = tf.compat.v1.placeholder_with_default(
                 False,
                 shape=(),
                 name='keras_learning_phase')
@@ -154,7 +154,7 @@ def set_learning_phase(value):
     if value not in {0, 1}:
         raise ValueError('Expected learning phase to be '
                          '0 or 1.')
-    _GRAPH_LEARNING_PHASES[tf.get_default_graph()] = value
+    _GRAPH_LEARNING_PHASES[tf.compat.v1.get_default_graph()] = value
 
 
 def get_session():
@@ -175,24 +175,24 @@ def get_session():
     """
     global _SESSION
 
-    default_session = tf.get_default_session()
+    default_session = tf.compat.v1.get_default_session()
 
     if default_session is not None:
         session = default_session
     else:
         if _SESSION is None:
             if not os.environ.get('OMP_NUM_THREADS'):
-                config = tf.ConfigProto(allow_soft_placement=True)
+                config = tf.compat.v1.ConfigProto(allow_soft_placement=True)
             else:
                 num_thread = int(os.environ.get('OMP_NUM_THREADS'))
-                config = tf.ConfigProto(intra_op_parallelism_threads=num_thread,
+                config = tf.compat.v1.ConfigProto(intra_op_parallelism_threads=num_thread,
                                         inter_op_parallelism_threads=num_thread,
                                         allow_soft_placement=True)
-            _SESSION = tf.Session(config=config)
+            _SESSION = tf.compat.v1.Session(config=config)
         session = _SESSION
     if not _MANUAL_VAR_INIT:
         with session.graph.as_default():
-            variables = tf.global_variables()
+            variables = tf.compat.v1.global_variables()
             candidate_vars = []
             for v in variables:
                 if not getattr(v, '_keras_initialized', False):
@@ -201,14 +201,14 @@ def get_session():
                 # This step is expensive, so we only run it on variables
                 # not already marked as initialized.
                 is_initialized = session.run(
-                    [tf.is_variable_initialized(v) for v in candidate_vars])
+                    [tf.compat.v1.is_variable_initialized(v) for v in candidate_vars])
                 uninitialized_vars = []
                 for flag, v in zip(is_initialized, candidate_vars):
                     if not flag:
                         uninitialized_vars.append(v)
                     v._keras_initialized = True
                 if uninitialized_vars:
-                    session.run(tf.variables_initializer(uninitialized_vars))
+                    session.run(tf.compat.v1.variables_initializer(uninitialized_vars))
     # hack for list_devices() function.
     # list_devices() function is not available under tensorflow r1.3.
     if not hasattr(session, 'list_devices'):
@@ -247,7 +247,7 @@ def _get_current_tf_device():
         the device (`CPU` or `GPU`). If the scope is not explicitly set, it will
         return `None`.
     """
-    g = tf.get_default_graph()
+    g = tf.compat.v1.get_default_graph()
     op = _TfDeviceCaptureOp()
     g._apply_device_functions(op)
     return op.device
@@ -526,7 +526,7 @@ def placeholder(shape=None, ndim=None, dtype=None, sparse=False, name=None):
     if sparse:
         x = tf.sparse_placeholder(dtype, shape=shape, name=name)
     else:
-        x = tf.placeholder(dtype, shape=shape, name=name)
+        x = tf.compat.v1.placeholder(dtype, shape=shape, name=name)
     x._keras_shape = shape
     x._uses_learning_phase = False
     return x
@@ -1687,7 +1687,7 @@ def log(x):
     # Returns
         A tensor.
     """
-    return tf.log(x)
+    return tf.math.log(x)
 
 
 def logsumexp(x, axis=None, keepdims=False):
@@ -2026,7 +2026,7 @@ def _fused_normalize_batch_in_training(x, gamma, beta, reduction_axes,
     if beta.dtype != tf.float32:
         beta = tf.cast(beta, tf.float32)
 
-    return tf.nn.fused_batch_norm(
+    return tf.compat.v1.nn.fused_batch_norm(
         x,
         gamma,
         beta,
@@ -2124,7 +2124,7 @@ def batch_normalization(x, mean, var, beta, gamma, axis=-1, epsilon=1e-3):
             if var.dtype != tf.float32:
                 var = tf.cast(var, tf.float32)
 
-            y, _, _ = tf.nn.fused_batch_norm(
+            y, _, _ = tf.compat.v1.nn.fused_batch_norm(
                 x,
                 gamma,
                 beta,
@@ -3561,7 +3561,7 @@ def categorical_crossentropy(target, output, from_logits=False, axis=-1):
         # manual computation of crossentropy
         _epsilon = _to_tensor(epsilon(), output.dtype.base_dtype)
         output = tf.clip_by_value(output, _epsilon, 1. - _epsilon)
-        return - tf.reduce_sum(target * tf.log(output), axis)
+        return - tf.reduce_sum(target * tf.math.log(output), axis)
     else:
         return tf.nn.softmax_cross_entropy_with_logits(labels=target,
                                                        logits=output)
@@ -3607,7 +3607,7 @@ def sparse_categorical_crossentropy(target, output, from_logits=False, axis=-1):
     if not from_logits:
         _epsilon = _to_tensor(epsilon(), output.dtype.base_dtype)
         output = tf.clip_by_value(output, _epsilon, 1 - _epsilon)
-        output = tf.log(output)
+        output = tf.math.log(output)
 
     output_shape = output.get_shape()
     targets = cast(flatten(target), 'int64')
@@ -3642,7 +3642,7 @@ def binary_crossentropy(target, output, from_logits=False):
         # transform back to logits
         _epsilon = _to_tensor(epsilon(), output.dtype.base_dtype)
         output = tf.clip_by_value(output, _epsilon, 1 - _epsilon)
-        output = tf.log(output / (1 - output))
+        output = tf.math.log(output / (1 - output))
 
     return tf.nn.sigmoid_cross_entropy_with_logits(labels=target,
                                                    logits=output)
@@ -4252,7 +4252,7 @@ def pool2d(x, pool_size, strides=(1, 1),
         pool_size = (1, 1) + pool_size
 
     if pool_mode == 'max':
-        x = tf.nn.max_pool(x, pool_size, strides,
+        x = tf.nn.max_pool2d(x, pool_size, strides,
                            padding=padding,
                            data_format=tf_data_format)
     elif pool_mode == 'avg':
@@ -4417,7 +4417,7 @@ def random_uniform(shape, minval=0.0, maxval=1.0, dtype=None, seed=None):
         dtype = floatx()
     if seed is None:
         seed = np.random.randint(10e6)
-    return tf.random_uniform(shape, minval=minval, maxval=maxval,
+    return tf.random.uniform(shape, minval=minval, maxval=maxval,
                              dtype=dtype, seed=seed)
 
 
@@ -4464,7 +4464,7 @@ def truncated_normal(shape, mean=0.0, stddev=1.0, dtype=None, seed=None):
         dtype = floatx()
     if seed is None:
         seed = np.random.randint(10e6)
-    return tf.truncated_normal(shape, mean, stddev, dtype=dtype, seed=seed)
+    return tf.random.truncated_normal(shape, mean, stddev, dtype=dtype, seed=seed)
 
 
 # CTC
@@ -4536,7 +4536,7 @@ def ctc_batch_cost(y_true, y_pred, input_length, label_length):
     input_length = tf.cast(tf.squeeze(input_length, axis=-1), tf.int32)
     sparse_labels = tf.cast(
         ctc_label_dense_to_sparse(y_true, label_length), tf.int32)
-    y_pred = tf.log(tf.transpose(y_pred, perm=[1, 0, 2]) + epsilon())
+    y_pred = tf.math.log(tf.transpose(y_pred, perm=[1, 0, 2]) + epsilon())
     return tf.expand_dims(ctc.ctc_loss(inputs=y_pred,
                                        labels=sparse_labels,
                                        sequence_length=input_length), 1)
@@ -4573,7 +4573,7 @@ def ctc_decode(y_pred, input_length, greedy=True, beam_width=100,
             Tensor `(top_paths, )` that contains
                 the log probability of each decoded sequence.
     """
-    y_pred = tf.log(tf.transpose(y_pred, perm=[1, 0, 2]) + epsilon())
+    y_pred = tf.math.log(tf.transpose(y_pred, perm=[1, 0, 2]) + epsilon())
     input_length = tf.cast(input_length, tf.int32)
 
     if greedy:
